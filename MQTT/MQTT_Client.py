@@ -134,7 +134,7 @@ class MQTT_Client():
     def create_shared_memories(self):
         for name in self.shm_name_list:
             try:
-                # 每个分配 16 * 4 bytes (float32)
+                # 16 * 4 bytes (float32)
                 shm = sm.SharedMemory(name=name, create=True, size=16 * 4)
                 print(f"✅ Shared memory '{name}' created.")
             except FileExistsError:
@@ -142,9 +142,8 @@ class MQTT_Client():
                 print(f"ℹ️ Shared memory '{name}' already exists, attached.")
 
             self.shm_handles[name] = shm
-            # 将 numpy 数组直接绑定到字典，方便后续直接通过名字写入
             self.shm_arrays[name] = np.ndarray((16,), dtype=np.float32, buffer=shm.buf)
-            self.shm_arrays[name][:] = 0  # 初始化归零
+            self.shm_arrays[name][:] = 0  # Zero initialize
 
     def update_shm_ctrl(self, name, target_data):
         if name in self.shm_arrays:
@@ -161,7 +160,6 @@ class MQTT_Client():
             print(f"❌ Error: Shared memory '{name}' not initialized.")
 
     def close_all_shm(self):
-        """程序退出时清理"""
         for name, shm in self.shm_handles.items():
             shm.close()
             # Note：Shared Memory's Creater should use unlink()
