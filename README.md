@@ -47,7 +47,7 @@ The User sends a specific robot request to the Manager. Once a match is confirme
 
 ### Phase 3: High-Level Command Transmission
 The User Client transmits high-level control packets (e.g., **Joint Positions** or **IK Targets**) to the MQTT Client. The Client decodes these asynchronous messages and updates the corresponding segments in the **Shared Memory** buffer.
-* **Key Topics:** `robot/{robot-id}`, `control/{robot-id}`
+* **Key Topics:** `robot/{robot-id}`, `control/{user-id}`
 
 ### Phase 4: Low-Level Control & Buffering
 The **Shared Memory** acts as a critical decoupling layer between the volatile network environment and the deterministic robot hardware.
