@@ -8,7 +8,7 @@
 ## Quick Start
 - [Protocal Architecture](#protocol-architecture)
 - [Build Your MQTT Broker](#build-your-mqtt-broker)
-- [Communication with Protocol](#communication-with-protocol)
+- [Communication and Deployment](#communication-and-deployment)
 
 ---
 
@@ -152,7 +152,7 @@ python MQTT_Topic_list.py
 
 ---
 
-## Communication with Protocol
+## Communication and Deployment
 
 ### 1. Starting the Infrastructure
 To initialize the communication layer, navigate to the `MQTT` directory and launch the components in the following order:
