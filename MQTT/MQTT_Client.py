@@ -72,7 +72,7 @@ class MQTT_Client():
                     print(f"------------------ {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} -------------------")
                     print(f"🎯 Capture New Control Request: {from_dev_id}")
 
-                    # If old subscribe exists, unsubscribe
+                    # If previous subscription exists, unsubscribe
                     if self.USER_UUID:
                         self.client.unsubscribe(self.MQTT_CTRL_TOPIC)
 
