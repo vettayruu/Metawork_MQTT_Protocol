@@ -1,7 +1,7 @@
 # Web-Based VR Teleoperation System
 
 <div align="center">
-  <img src="./MQTT_Protocal.pdf" alt="MQTT Protocal" width="800"/>
+  <embed src="MQTT_Protocal.pdf" type="application/pdf" width="800" height="600" />
   <p><em>Figure 1: Uclab's MQTT Protocal.</em></p>
 </div>
 
