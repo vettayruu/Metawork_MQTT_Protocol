@@ -1,7 +1,7 @@
 # Uclab's Metawork MQTT Protocol
 
 <div align="center">
-  <image src="./MQTT_Protocol.png" type="application/pdf" width="800" height="600" />
+  <image src="./MQTT_Protocol.png" type="application/pdf" width="1000" height="600" />
   <p><em>Figure 1: Uclab's Metawork MQTT Protocol.</em></p>
 </div>
 
