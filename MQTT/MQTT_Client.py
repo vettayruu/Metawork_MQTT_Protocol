@@ -28,7 +28,6 @@ class MQTT_Client():
         self.mode = MQTT_Mode
 
         self.client = None
-
         self.USER_UUID = None
         self.MQTT_CTRL_TOPIC = f"{MQTT_CTRL_TOPIC}/{ROBOT_UUID}"
         self.MQTT_RECV_TOPIC = f"{MQTT_MANAGE_RCV_TOPIC}/{ROBOT_UUID}"
@@ -38,8 +37,8 @@ class MQTT_Client():
         self.right_arm_joints_ctrl = np.zeros(8)
         self.right_hand_joints_ctrl = np.zeros(8)
 
-        self.shm_handles = {}  # 存储 SharedMemory 对象
-        self.shm_arrays = {}  # 存储映射后的 numpy 数组
+        self.shm_handles = {}
+        self.shm_arrays = {}
         self.shm_name_list = ['Left_Arm', 'Left_Hand', 'Right_Arm', 'Right_Hand']
 
     def on_connect(self, client, userdata, flags, rc):
@@ -63,24 +62,23 @@ class MQTT_Client():
             print("Unexpected disconnection.")
 
     def on_message(self, client, userdata, msg):
-        # --- 1. 处理管理事件，更新订阅 ---
         if msg.topic == self.MQTT_RECV_TOPIC:
             try:
                 controller_msg = json.loads(msg.payload.decode())
                 from_dev_id = controller_msg["devId"]
 
-                # 只有当控制者 ID 改变或者是第一次获取时才进行订阅
+                # Subscribe as first request or different robot request
                 if from_dev_id and from_dev_id != self.USER_UUID:
                     print(f"------------------ {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} -------------------")
                     print(f"🎯 Capture New Control Request: {from_dev_id}")
 
-                    # 如果之前有旧的订阅，先取消（可选，保持环境整洁）
+                    # If old subscribe exists, unsubscribe
                     if self.USER_UUID:
                         self.client.unsubscribe(self.MQTT_CTRL_TOPIC)
 
                     self.USER_UUID = from_dev_id
 
-                    # 执行订阅
+                    # Subscribe control topics
                     topics_to_sub = [
                         self.MQTT_CTRL_TOPIC,
                     ]
@@ -92,8 +90,6 @@ class MQTT_Client():
                 print(f"❌ Subscribe {self.MQTT_RECV_TOPIC} failed: {e}")
             return
 
-        # --- 2. 处理控制消息 (增加安全检查) ---
-        # 只有当话题变量已定义时才匹配
         try:
             if msg.topic == self.MQTT_CTRL_TOPIC:
                 # Message: {timestamp, devId, left: {arm, hand}, right: {arm, hand}}
@@ -110,7 +106,7 @@ class MQTT_Client():
                 self.update_shm_ctrl("Right_Hand", self.right_hand_joints_ctrl)
 
         except Exception as e:
-            print(f"⚠️ 数据处理错误: {msg.topic}, {e}")
+            print(f"⚠️ Data Receive Error: {msg.topic}, {e}")
 
     def connect_mqtt(self):
         if self.mode == "local":
@@ -151,18 +147,14 @@ class MQTT_Client():
             self.shm_arrays[name][:] = 0  # 初始化归零
 
     def update_shm_ctrl(self, name, target_data):
-        """【前半部】更新控制目标 (索引 0-7)"""
         if name in self.shm_arrays:
-            # 只针对前 8 位进行覆盖写入
             target_array = np.array(target_data, dtype=np.float32).flatten()[:8]
             self.shm_arrays[name][0:8] = target_array
         else:
             print(f"❌ Error: Shared memory '{name}' not initialized.")
 
     def update_shm_robot(self, name, robot_data):
-        """【后半部】更新机器人反馈状态 (索引 8-15)"""
         if name in self.shm_arrays:
-            # 只针对后 8 位进行覆盖写入
             feedback_array = np.array(robot_data, dtype=np.float32).flatten()[:8]
             self.shm_arrays[name][8:16] = feedback_array
         else:
@@ -172,7 +164,7 @@ class MQTT_Client():
         """程序退出时清理"""
         for name, shm in self.shm_handles.items():
             shm.close()
-            # 注意：只有创建者应该调用 unlink()，如果此进程是创建者，取消注释下一行
+            # Note：Shared Memory's Creater should use unlink()
             shm.unlink()
         print("🧹 All Shared Memory handles closed.")
 
@@ -193,7 +185,7 @@ class MQTT_Client():
                 }
             }
 
-            # 建议使用 qos=0 提高实时性，因为反馈状态是流式的，丢一帧没关系
+            # Quality of Service set as qos=0
             self.client.publish(
                 f"{MQTT_ROBOT_STATE_TOPIC}/{ROBOT_UUID}",
                 json.dumps(robot_msg),
@@ -210,11 +202,8 @@ if __name__ == '__main__':
     client.connect_mqtt()
 
     try:
-        # 3. 主线程循环：保持程序存活，并执行周期性任务
+        # Keep MQTT Client alive
         while True:
-            # 可以在这里添加：读取 SHM 反馈并发布到云端的逻辑
-            # 例如：client.publish_all_feedbacks()
-
             client.publish_robot_state()
             time.sleep(1)
 
