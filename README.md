@@ -156,14 +156,29 @@ python MQTT_Topic_list.py
 
 ### 1. Starting the Infrastructure
 To initialize the communication layer, navigate to the `MQTT` directory and launch the components in the following order:
-
 * **Start the Manager:**
 ```bash
   python MQTT_Manager.py
 ```
 
 The Manager acts as the central orchestrator for user-robot pairing.
+* **Start the Client:**
+```bash
+  python MQTT_Client.py
+```
+*The Client creates shared memories and establishes the bridge between the MQTT Client and the Robot Low-Level Controller.*
 
+### 2. Lifecycle & Heartbeat Monitoring
+The MQTT Client maintains a persistent heartbeat to ensure system reliability:
 
+* **State Broadcasting:**
+The Client publishes robot state messages at a 1 Hz. This serves as a "keep-alive" signal and a monitor of the robot's connectivity and health.
+
+### 3. User Client Synchronization
+On the User Client side (e.g., Quest 3 / VR interface):
+
+* **Session Initialization:** Upon every new Robot Request, the system performs an automatic state synchronization. This ensures the virtual control environment (initial pose) aligns with the robot's current physical configuration before teleoperation begins.
+
+* **Live Updates:** The interface consumes the 1 Hz state messages to reflect the current robot status to the user.
 
 
