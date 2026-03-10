@@ -8,12 +8,11 @@ import multiprocessing.shared_memory as sm
 import os
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
-ROBOT_MODEL = os.getenv("ROBOT_MODEL","Unitree-G1-control-LIU")
-ROBOT_UUID = os.getenv("ROBOT_UUID","Unitree-G1-control-LIU")
+ROBOT_TYPE = os.getenv("ROBOT_TYPE","Unitree-G1-Dex3")
+ROBOT_UUID = os.getenv("ROBOT_UUID","2A5PE-YUSHU008")
 
 MQTT_MANAGE_TOPIC = os.getenv("MQTT_MANAGE_TOPIC", "mgr")
-MQTT_MANAGE_RCV_TOPIC = os.getenv("MQTT_MANAGE_RCV_TOPIC", "dev")
-MQTT_MANAGE_EVENT_TOPIC = os.getenv("MQTT_MANAGE_EVENT_TOPIC", "mgr/event")
+MQTT_DEVICE_TOPIC = os.getenv("MQTT_DEVICE_TOPIC", "dev")
 
 MQTT_CTRL_TOPIC = os.getenv("MQTT_CTRL_TOPIC", "control")
 MQTT_ROBOT_STATE_TOPIC = os.getenv("MQTT_ROBOT_STATE_TOPIC", "robot")
@@ -29,8 +28,8 @@ class MQTT_Client():
 
         self.client = None
         self.USER_UUID = None
-        self.MQTT_CTRL_TOPIC = f"{MQTT_CTRL_TOPIC}/{ROBOT_UUID}"
-        self.MQTT_RECV_TOPIC = f"{MQTT_MANAGE_RCV_TOPIC}/{ROBOT_UUID}"
+        self.MQTT_CTRL_TOPIC = MQTT_CTRL_TOPIC
+        self.MQTT_RECV_TOPIC = f"{MQTT_DEVICE_TOPIC}/{ROBOT_UUID}"
 
         self.left_arm_joints_ctrl = np.zeros(8)
         self.left_hand_joints_ctrl = np.zeros(8)
@@ -41,25 +40,30 @@ class MQTT_Client():
         self.shm_arrays = {}
         self.shm_name_list = ['Left_Arm', 'Left_Hand', 'Right_Arm', 'Right_Hand']
 
-    def on_connect(self, client, userdata, flags, rc):
-        # For register
-        date = datetime.now().strftime('%c')
-        my_info = {
-            "date": date,
-            "devType": "robot",
-            "type": ROBOT_MODEL,
-            "version": "0.1",
-            "devId": ROBOT_UUID
-        }
-        self.client.publish("mgr/register", json.dumps(my_info))
-        print("Publish Robot info to MQTT manager:", json.dumps(my_info))
+    def on_connect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            print("MQTT Connected successfully")
+            # For register
+            my_info = {
+                "date": datetime.now().strftime('%c'),
+                "devType": "robot",
+                "type": ROBOT_TYPE,
+                "version": "0.1.1",
+                "devId": ROBOT_UUID
+            }
+            self.client.publish("mgr/register", json.dumps(my_info), qos=1)
+            print("Robot Registered:", json.dumps(my_info))
 
-        self.client.subscribe(self.MQTT_RECV_TOPIC)  # connected -> subscribe
-        print(f"Subscribe Controller info from {self.MQTT_RECV_TOPIC}")
+            self.client.subscribe(self.MQTT_RECV_TOPIC)
 
-    def on_disconnect(self, client, userdata, rc):
-        if rc != 0:
-            print("Unexpected disconnection.")
+        else:
+            print(f"Connect failed with code {reason_code}")
+
+    def on_disconnect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            print("✅ Disconnected successfully ")
+        else:
+            print(f"⚠️ Disconnected with code {reason_code}")
 
     def on_message(self, client, userdata, msg):
         if msg.topic == self.MQTT_RECV_TOPIC:
@@ -72,11 +76,12 @@ class MQTT_Client():
                     print(f"------------------ {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))} -------------------")
                     print(f"🎯 Capture New Control Request: {from_dev_id}")
 
-                    # If previous subscription exists, unsubscribe
+                    # If old subscribe exists, unsubscribe
                     if self.USER_UUID:
                         self.client.unsubscribe(self.MQTT_CTRL_TOPIC)
 
                     self.USER_UUID = from_dev_id
+                    self.MQTT_CTRL_TOPIC = f"{MQTT_CTRL_TOPIC}/{self.USER_UUID}"
 
                     # Subscribe control topics
                     topics_to_sub = [
@@ -111,7 +116,7 @@ class MQTT_Client():
     def connect_mqtt(self):
         if self.mode == "local":
             self.client = mqtt.Client(
-                # callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
                 transport="websockets"
             )
             self.client.tls_set(cert_reqs=0)
@@ -123,7 +128,7 @@ class MQTT_Client():
 
         elif self.mode == "uclab":
             self.client = mqtt.Client(
-                # callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             )
             self.client.on_connect = self.on_connect
             self.client.on_disconnect = self.on_disconnect
@@ -134,7 +139,6 @@ class MQTT_Client():
     def create_shared_memories(self):
         for name in self.shm_name_list:
             try:
-                # 16 * 4 bytes (float32)
                 shm = sm.SharedMemory(name=name, create=True, size=16 * 4)
                 print(f"✅ Shared memory '{name}' created.")
             except FileExistsError:
@@ -143,7 +147,7 @@ class MQTT_Client():
 
             self.shm_handles[name] = shm
             self.shm_arrays[name] = np.ndarray((16,), dtype=np.float32, buffer=shm.buf)
-            self.shm_arrays[name][:] = 0  # Zero initialize
+            self.shm_arrays[name][:] = 0
 
     def update_shm_ctrl(self, name, target_data):
         if name in self.shm_arrays:
@@ -192,9 +196,27 @@ class MQTT_Client():
         except KeyError as e:
             print(f"⚠️ SHM Key not found: {e}")
 
+    def robot_unregister(self):
+        unregister_msg = {
+            "time": datetime.now().strftime('%c'),
+            "devId": ROBOT_UUID,
+        }
+
+        info = self.client.publish(
+            "mgr/unregister",
+            json.dumps(unregister_msg),
+            qos=1,
+        )
+
+        try:
+            info.wait_for_publish(timeout=1.0)
+            print(f"Robot {ROBOT_UUID} Unregistered Successfully.")
+        except RuntimeError:
+            print("Unregister failed: Message not published (Timeout or Disconnected).")
+
 
 if __name__ == '__main__':
-    mode = "local" # "local" or "uclab"
+    mode = "uclab" # "local" or "uclab"
     client = MQTT_Client(mode)
     client.create_shared_memories()
     client.connect_mqtt()
@@ -208,4 +230,16 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\nStopping...")
     finally:
+        # Unregister
+        client.robot_unregister()
+
+        # Disconnect
+        if client.client.is_connected():
+            client.client.disconnect()
+
+        # Loop stop
+        client.client.loop_stop()
+
+        # Close shard memory
         client.close_all_shm()
+        print("Client Closed Successfully.")
