@@ -9,7 +9,7 @@
 - [Protocal Architecture](#protocol-architecture)
 - [Build Your MQTT Broker](#build-your-mqtt-broker)
 - [Communication and Deployment](#communication-and-deployment)
-
+- [How to use shared memory](#how-to-use-shared-memory)
 ---
 
 ## Protocol Architecture
@@ -181,4 +181,66 @@ On the User Client side (e.g., Quest 3 / VR interface):
 
 * **Live Updates:** The interface consumes the 1 Hz state messages to reflect the current robot status to the user.
 
+---
 
+## How to use shared memory
+The scripts `MQTT_Simulation_Left.py` and `MQTT_Simulation_Right.py` demonstrate how to interface with the robot using shared memory.
+
+In `MQTT_Client.py`, four shared memory segments are initialized: `Left_Arm`, `Left_Hand`, `Right_Arm`, `Right_Hand`. 
+Each segment acts as a zero-copy bridge between the MQTT network layer and the local control loop.
+
+### 1. Accessing Shared Memory
+To access an existing memory segment created by another process, use the `name` identifier:
+
+```Python
+from multiprocessing import shared_memory
+import numpy as np
+
+# Attach to the existing memory segments
+shm_left_arm = shared_memory.SharedMemory(name='Left_Arm')
+shm_left_hand = shared_memory.SharedMemory(name='Left_Hand')
+```
+
+### 2. Mapping to NumPy Arrays
+Map the raw memory buffer to a NumPy array for easy manipulation. 
+In this project, we use a 16-element float32 array (64 bytes total) where the data is typically split into Target and Actual states.
+
+```Python
+# Create numpy arrays mapped directly to the shared buffer
+# Size (16,) allows for 8 target values and 8 feedback values
+arm_data = np.ndarray((16,), dtype=np.float32, buffer=shm_left_arm.buf)
+hand_data = np.ndarray((16,), dtype=np.float32, buffer=shm_left_hand.buf)
+```
+
+### 3. Data Layout & Usage
+The data within the 16-element array is organized by index offsets:
+
+| Index Range | Purpose | Description |
+| :--- | :--- | :--- |
+| `[0:8]` | **Target** | Joint Positions received from MQTT |
+| `[8:16]` | **Actual** | Real-time feedback from the robot |
+
+**Reading Targets (Input to Control)**
+In your control loop, copy the target data to avoid race conditions during calculations:
+
+```Python
+# Extract target positions
+thetaBody_Target = arm_data[0:8].copy() # 0 for waist, 1-7 for arm. The waist joint is currently not used.
+thetaTool_Target = hand_data[0:7].copy() # 0-2 for thumb, 3-4 for middle, 5-6 for index
+```
+
+**Writing Feedback (Output to Monitor)**
+```Python
+# Update robot feedback to shared memory
+arm_data[8:16] = sim.get_joint_position()  # Expecting 8 values
+hand_data[8:15] = sim.get_tool_position()   # Expecting 7 values
+```
+
+**Clean Up**
+When the process exits, remember to close the connection to the shared memory:
+```Python
+shm_left_arm.close()
+shm_left_hand.close()
+```
+**Note**: The array size and offsets must be strictly consistent across all processes. 
+If you change the robot's DOF (Degrees of Freedom), ensure the ndarray shape and the buffer size in `MQTT_Client.py` are updated accordingly.
