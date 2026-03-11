@@ -207,10 +207,15 @@ In this project, we use a 16-element float32 array (64 bytes total) where the da
 
 ```Python
 # Create numpy arrays mapped directly to the shared buffer
-# Size (16,) allows for 8 target values and 8 feedback values
+# Shape (16,) allows for 8 target values and 8 feedback values
 arm_data = np.ndarray((16,), dtype=np.float32, buffer=shm_left_arm.buf)
 hand_data = np.ndarray((16,), dtype=np.float32, buffer=shm_left_hand.buf)
 ```
+
+**Shared Memory Mapping** is the most critical step. It does **not** "copy" the data; instead, it creates a NumPy array **mapping directly** onto the shared memory segment.
+* Shape `(16,)`: Defines the array structure. It tells NumPy that this memory segment contains a sequence of 16 numbers.
+* `dtype=np.float32`: Defines the data type. Since each `float32` occupies 4 bytes, the 16 numbers together consume exactly 64 bytes of memory.
+* `buffer=shm_left_arm.buf`: The most vital parameter. It instructs NumPy **not** to allocate its own new memory, but to use the raw binary stream (`buf`) of the shared memory block as its data source.
 
 ### 3. Data Layout & Usage
 The data within the 16-element array is organized by index offsets:
