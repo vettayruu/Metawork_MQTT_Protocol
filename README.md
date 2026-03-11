@@ -187,7 +187,8 @@ On the User Client side (e.g., Quest 3 / VR interface):
 The scripts `MQTT_Simulation_Left.py` and `MQTT_Simulation_Right.py` demonstrate how to interface with the robot using shared memory.
 
 In `MQTT_Client.py`, four shared memory segments are initialized: `Left_Arm`, `Left_Hand`, `Right_Arm`, `Right_Hand`. 
-Each segment acts as a zero-copy bridge between the MQTT network layer and the local control loop.
+
+Each segment acts as a **zero-copy** (Check https://en.wikipedia.org/wiki/Zero-copy for more details) bridge between the MQTT network layer and the local control loop.
 
 ### 1. Accessing Shared Memory
 To access an existing memory segment created by another process, use the `name` identifier:
