@@ -33,4 +33,3 @@ Browsers (especially on VR headsets like Quest 3) will block WebSocket connectio
 
 - **For MQTT (via WebSockets):** Open https://liust.local/mqtt (or your specific path) in the VR browser first. Click "Advanced" and "Proceed" to manually trust the certificate for that session.
 - **For WebRTC (Sora):** Similarly, visit https://sora2.uclab.jp/signaling to authorize the connection before launching your application.
-- 
